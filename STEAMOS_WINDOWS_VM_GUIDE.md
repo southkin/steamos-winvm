@@ -6,6 +6,8 @@
 
 SteamOS 기본 `distrobox`가 너무 오래되어 초기화가 계속 실패하면, `INSTALL_DISTROBOX=1`로 upstream 최신 `distrobox`를 `~/.local/bin`에 설치해서 그 버전을 우선 사용하도록 할 수 있습니다.
 
+만약 `quickget`이 Windows 설치 ISO를 자동으로 못 가져오면, ISO 다운로드만 수동으로 하고 `./setup-winvm-distrobox.sh import-iso /path/to/file.iso` 또는 `WINDOWS_ISO_PATH=/path/to/file.iso ./setup-winvm-distrobox.sh create` 로 기대 위치에 자동 복사할 수 있습니다.
+
 ## 빠른 실행
 
 ```bash

@@ -16,6 +16,7 @@ VM_WIDTH="${VM_WIDTH:-1280}"
 VM_HEIGHT="${VM_HEIGHT:-800}"
 INSTALL_DISTROBOX="${INSTALL_DISTROBOX:-0}"
 DISTROBOX_ROOTFUL="${DISTROBOX_ROOTFUL:-0}"
+WINDOWS_ISO_PATH="${WINDOWS_ISO_PATH:-}"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT_PATH="$SCRIPT_DIR/$(basename -- "${BASH_SOURCE[0]}")"
@@ -63,6 +64,24 @@ resolve_vm_media_dir() {
   printf '%s\n' "$VM_DIR/$vm_conf_base"
 }
 
+resolve_vm_install_iso_path() {
+  local vm_conf_path iso_value
+  vm_conf_path="$(resolve_vm_conf_path)"
+
+  if [[ -f "$vm_conf_path" ]]; then
+    iso_value="$(sed -n 's/^iso="\([^"]*\)"/\1/p' "$vm_conf_path" | head -n 1)"
+    if [[ -n "$iso_value" ]]; then
+      case "$iso_value" in
+        /*) printf '%s\n' "$iso_value" ;;
+        *) printf '%s\n' "$VM_DIR/$iso_value" ;;
+      esac
+      return 0
+    fi
+  fi
+
+  printf '%s\n' "$VM_DIR/$VM_CONF_PREFIX/windows-$WINDOWS_VERSION.iso"
+}
+
 vm_windows_iso_exists() {
   local vm_media_dir
   vm_media_dir="$(resolve_vm_media_dir)"
@@ -81,6 +100,19 @@ reset_vm_definition() {
   if [[ -d "$vm_media_dir" ]]; then
     rm -rf "$vm_media_dir"
   fi
+}
+
+import_windows_iso() {
+  local source_iso="${1:-$WINDOWS_ISO_PATH}"
+  [[ -n "$source_iso" ]] || die "import-iso needs a source ISO path."
+  [[ -f "$source_iso" ]] || die "ISO not found: $source_iso"
+
+  local target_iso target_dir
+  target_iso="$(resolve_vm_install_iso_path)"
+  target_dir="$(dirname "$target_iso")"
+  mkdir -p "$target_dir"
+  cp -f "$source_iso" "$target_iso"
+  log "Imported Windows ISO to $target_iso"
 }
 
 run_quickget() {
@@ -114,6 +146,7 @@ Commands:
   check               Check host prerequisites and print warnings
   setup               Create/update the distrobox and install Quickemu dependencies
   create              Download/create the Windows VM with quickget
+  import-iso PATH     Copy a manually-downloaded Windows ISO into the expected VM path
   run                 Run the Windows VM
   desktop             Create a desktop launcher
   recreate            Remove the existing distrobox, then create it again as Ubuntu
@@ -130,9 +163,11 @@ Common environment variables:
   CPU_CORES=4 RAM_SIZE=4G DISK_SIZE=80G
   INSTALL_DISTROBOX=1                Install distrobox into ~/.local if missing
   DISTROBOX_ROOTFUL=1                Optional rootful distrobox mode; rootless is the default
+  WINDOWS_ISO_PATH=/path/file.iso    Import a manually-downloaded Windows ISO during create
 
 Examples:
   ./setup-winvm-distrobox.sh all
+  ./setup-winvm-distrobox.sh import-iso ~/Downloads/Win11.iso
   DISPLAY_BACKEND=spice ./setup-winvm-distrobox.sh run
   ./setup-winvm-distrobox.sh snapshot-create clean-install
 EOF
@@ -377,16 +412,25 @@ create_windows_vm() {
   if [[ -f "$vm_conf_path" ]]; then
     log "VM config already exists: $vm_conf_path"
     if ! vm_windows_iso_exists; then
-      warn "Windows install ISO is missing for the existing VM. Removing incomplete media and regenerating with quickget."
-      reset_vm_definition
-      run_quickget
-      vm_conf_path="$(resolve_vm_conf_path)"
+      if [[ -n "$WINDOWS_ISO_PATH" ]]; then
+        warn "Windows install ISO is missing for the existing VM. Importing manually downloaded ISO."
+        import_windows_iso
+      else
+        warn "Windows install ISO is missing for the existing VM. Removing incomplete media and regenerating with quickget."
+        reset_vm_definition
+        run_quickget
+        vm_conf_path="$(resolve_vm_conf_path)"
+      fi
     fi
     tune_vm_config
     return 0
   fi
 
   run_quickget
+  if ! vm_windows_iso_exists && [[ -n "$WINDOWS_ISO_PATH" ]]; then
+    warn "quickget did not produce a Windows install ISO. Importing manually downloaded ISO."
+    import_windows_iso
+  fi
   tune_vm_config
 }
 
@@ -514,6 +558,9 @@ case "$cmd" in
     ;;
   recreate)
     recreate_container
+    ;;
+  import-iso)
+    import_windows_iso "${1:-}"
     ;;
   snapshot-create)
     snapshot_create "${1:-}"
