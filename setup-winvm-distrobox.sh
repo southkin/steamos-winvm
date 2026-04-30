@@ -15,7 +15,7 @@ DISK_SIZE="${DISK_SIZE:-80G}"
 VM_WIDTH="${VM_WIDTH:-1280}"
 VM_HEIGHT="${VM_HEIGHT:-800}"
 INSTALL_DISTROBOX="${INSTALL_DISTROBOX:-0}"
-DISTROBOX_ROOTFUL="${DISTROBOX_ROOTFUL:-1}"
+DISTROBOX_ROOTFUL="${DISTROBOX_ROOTFUL:-0}"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT_PATH="$SCRIPT_DIR/$(basename -- "${BASH_SOURCE[0]}")"
@@ -64,7 +64,7 @@ Common environment variables:
   DISPLAY_BACKEND=sdl                sdl, gtk, spice, spice-app, none
   CPU_CORES=4 RAM_SIZE=4G DISK_SIZE=80G
   INSTALL_DISTROBOX=1                Install distrobox into ~/.local if missing
-  DISTROBOX_ROOTFUL=1                Use a rootful distrobox; recommended on SteamOS for apt/sudo
+  DISTROBOX_ROOTFUL=1                Optional rootful distrobox mode; rootless is the default
 
 Examples:
   ./setup-winvm-distrobox.sh all
@@ -210,6 +210,8 @@ create_container() {
   mkdir -p "$CONTAINER_HOME" "$VM_DIR"
 
   local device_flags=""
+  local init_packages="software-properties-common ca-certificates curl gnupg lsb-release qemu-system-x86 qemu-utils qemu-system-gui qemu-system-modules-spice ovmf swtpm-tools genisoimage jq mesa-utils mtools pciutils procps python3 sed socat spice-client-gtk unzip usbutils util-linux uuid-runtime x11-xserver-utils xdg-user-dirs zsync"
+  local init_hooks='apt-add-repository -y universe || true; apt-add-repository -y ppa:flexiondotorg/quickemu; apt-get update; apt-get install -y quickemu'
   local dev
   for dev in /dev/kvm /dev/net/tun /dev/vhost-net; do
     if [[ -e "$dev" ]]; then
@@ -217,7 +219,7 @@ create_container() {
     fi
   done
 
-  local args=(create --name "$CONTAINER_NAME" --image "$CONTAINER_IMAGE" --home "$CONTAINER_HOME" --volume "$VM_DIR:$VM_DIR:rw")
+  local args=(--name "$CONTAINER_NAME" --image "$CONTAINER_IMAGE" --home "$CONTAINER_HOME" --volume "$VM_DIR:$VM_DIR:rw" --additional-packages "$init_packages" --init-hooks "$init_hooks")
   if [[ -n "$device_flags" ]]; then
     args+=(--additional-flags "$device_flags")
   fi
@@ -252,58 +254,9 @@ install_quickemu() {
   create_container
   ensure_container_is_ubuntu
 
-  log "Installing Quickemu and QEMU packages inside the distrobox."
-  dbx_bash '
-set -Eeuo pipefail
-export DEBIAN_FRONTEND=noninteractive
-
-as_root() {
-  if [[ "$(id -u)" -eq 0 ]]; then
-    "$@"
-  else
-    sudo "$@"
-  fi
-}
-
-if command -v quickemu >/dev/null 2>&1 && command -v quickget >/dev/null 2>&1; then
-  quickemu --version || true
-  exit 0
-fi
-
-as_root apt-get update
-as_root apt-get install -y software-properties-common ca-certificates curl gnupg lsb-release
-as_root apt-add-repository -y universe || true
-as_root apt-add-repository -y ppa:flexiondotorg/quickemu
-as_root apt-get update
-as_root apt-get install -y \
-  quickemu \
-  qemu-system-x86 \
-  qemu-utils \
-  qemu-system-gui \
-  qemu-system-modules-spice \
-  ovmf \
-  swtpm-tools \
-  genisoimage \
-  jq \
-  mesa-utils \
-  mtools \
-  pciutils \
-  procps \
-  python3 \
-  sed \
-  socat \
-  spice-client-gtk \
-  unzip \
-  usbutils \
-  util-linux \
-  uuid-runtime \
-  x11-xserver-utils \
-  xdg-user-dirs \
-  zsync
-
-quickemu --version || true
-quickget --version || true
-'
+  log "Checking Quickemu tooling inside the distrobox."
+  dbx_bash 'command -v quickemu >/dev/null 2>&1 && command -v quickget >/dev/null 2>&1' || die "Quickemu is missing from the distrobox. Run './setup-winvm-distrobox.sh recreate' to rebuild the container."
+  dbx_bash 'quickemu --version || true; quickget --version || true'
 }
 
 tune_vm_config() {

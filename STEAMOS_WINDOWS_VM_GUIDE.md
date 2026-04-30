@@ -23,7 +23,7 @@ DISPLAY_BACKEND=spice ./setup-winvm-distrobox.sh run
 ## 자동화되는 부분
 
 - `distrobox` 컨테이너 생성
-- 컨테이너 내부에 Quickemu/QEMU/OVMF/swtpm/VirtIO 관련 패키지 설치
+- 컨테이너 생성 단계에서 Quickemu/QEMU/OVMF/swtpm/VirtIO 관련 패키지 초기 설치
 - `quickget windows 10` 또는 `quickget windows 11`로 Windows ISO와 VM 설정 생성
 - SteamOS 앱 런처용 `.desktop` 파일 생성
 - 반복 실행용 `run`, 스냅샷용 `snapshot-create`, `snapshot-apply` 명령 제공
@@ -81,22 +81,20 @@ SteamOS의 rootless `distrobox`에서는 컨테이너 내부 `sudo`가 아래처
 sudo: The "no new privileges" flag is set
 ```
 
-이 스크립트는 이제 기본적으로 rootful `distrobox` 모드로 동작합니다. 이미 rootless `steamos-winvm`을 한 번 만든 상태라면 아래처럼 다시 만드는 게 맞습니다.
+현재 스크립트는 이 문제를 피하려고, 패키지 설치를 컨테이너 생성 시점에 처리합니다. 그래서 기본 동작은 다시 rootless 모드입니다. 만약 예전 버전으로 만든 컨테이너가 남아 있다면 다시 만드는 게 맞습니다.
 
 ```bash
 ./setup-winvm-distrobox.sh recreate
 ./setup-winvm-distrobox.sh all
 ```
 
-rootful 모드에서는 `distrobox`가 sudo 비밀번호를 물을 수 있습니다. SteamOS에서 sudo 비밀번호가 아직 없으면 먼저 설정해야 할 수 있습니다.
+`DISTROBOX_ROOTFUL=1`로 강제로 rootful 모드를 쓰는 경우에는 `distrobox`가 sudo 비밀번호를 물을 수 있습니다. SteamOS에서 sudo 비밀번호가 아직 없으면 먼저 설정해야 할 수 있습니다.
 
 ```bash
 passwd
 ```
 
-그리고 rootful 모드는 host `sudo`가 필요하므로, Flatpak으로 설치한 VS Code 같은 sandbox 내부 터미널에서는 실행하면 안 됩니다. SteamOS의 Konsole 같은 일반 호스트 터미널에서 실행해야 합니다.
-
-첫 rootful 실행에서는 `distrobox`가 컨테이너 내부 사용자 설정을 위해 한 번 interactive enter를 요구할 수 있습니다. 스크립트가 컨테이너 쉘을 열면 안내에 따라 진행한 뒤 `exit`로 나오면 나머지 단계가 이어집니다.
+또한 rootful 모드는 host `sudo`가 필요하므로, Flatpak으로 설치한 VS Code 같은 sandbox 내부 터미널에서는 실행하면 안 됩니다. SteamOS의 Konsole 같은 일반 호스트 터미널에서 실행해야 합니다.
 
 ## 권한 점검
 
