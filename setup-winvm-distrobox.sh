@@ -181,13 +181,22 @@ ensure_container_ready() {
     return 0
   fi
 
-  if [[ "$DISTROBOX_ROOTFUL" == "1" ]] && container_exists; then
-    log "Rootful distrobox needs a first interactive enter to finish setup."
-    log "When the container shell opens, complete any password prompt, then run 'exit' to continue."
+  if container_exists; then
+    if [[ "$DISTROBOX_ROOTFUL" == "1" ]]; then
+      log "Rootful distrobox needs a first interactive enter to finish setup."
+      log "When the container shell opens, complete any password prompt, then run 'exit' to continue."
+    else
+      log "The distrobox needs a first interactive enter to finish setup."
+      log "When the container shell opens, wait for the prompt, then run 'exit' to continue."
+    fi
     dbx_enter "$CONTAINER_NAME"
   fi
 
-  container_ready || die "Distrobox '$CONTAINER_NAME' is not ready. If this is the first rootful run, execute 'distrobox enter --root $CONTAINER_NAME' once, exit, then rerun the script."
+  if [[ "$DISTROBOX_ROOTFUL" == "1" ]]; then
+    container_ready || die "Distrobox '$CONTAINER_NAME' is not ready. Execute 'distrobox enter --root $CONTAINER_NAME' once, exit, then rerun the script."
+  else
+    container_ready || die "Distrobox '$CONTAINER_NAME' is not ready. Execute 'distrobox enter $CONTAINER_NAME' once, exit, then rerun the script."
+  fi
 }
 
 create_container() {
