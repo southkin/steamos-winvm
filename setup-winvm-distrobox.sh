@@ -131,14 +131,28 @@ check_host() {
   fi
 }
 
+container_exists() {
+  distrobox list --no-color 2>/dev/null | awk -F'|' -v name="$CONTAINER_NAME" '
+    NR == 1 { next }
+    {
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1)
+      if ($1 == name) {
+        found = 1
+      }
+    }
+    END { exit(found ? 0 : 1) }
+  '
+}
+
 container_ready() {
-  distrobox enter "$CONTAINER_NAME" -- true >/dev/null 2>&1
+  container_exists && distrobox enter "$CONTAINER_NAME" -- true >/dev/null 2>&1
 }
 
 create_container() {
   check_host
+  log "Checking whether distrobox '$CONTAINER_NAME' already exists."
 
-  if container_ready; then
+  if container_exists; then
     log "Distrobox '$CONTAINER_NAME' already exists."
     return 0
   fi
@@ -360,7 +374,7 @@ enter_container() {
 recreate_container() {
   check_host
 
-  if container_ready; then
+  if container_exists; then
     warn "Removing existing distrobox '$CONTAINER_NAME'."
     distrobox rm --force "$CONTAINER_NAME"
   fi
