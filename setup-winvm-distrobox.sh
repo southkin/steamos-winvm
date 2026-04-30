@@ -3,7 +3,7 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 CONTAINER_NAME="${CONTAINER_NAME:-steamos-winvm}"
-CONTAINER_IMAGE="${CONTAINER_IMAGE:-docker.io/library/ubuntu:22.04}"
+CONTAINER_IMAGE="${CONTAINER_IMAGE:-quay.io/toolbx/ubuntu-toolbox:22.04}"
 CONTAINER_HOME="${CONTAINER_HOME:-$HOME/.local/share/$CONTAINER_NAME/home}"
 VM_DIR="${VM_DIR:-$HOME/VMs/quickemu}"
 WINDOWS_VERSION="${WINDOWS_VERSION:-11}"

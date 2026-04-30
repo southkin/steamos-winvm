@@ -2,7 +2,7 @@
 
 이 구성은 SteamOS 호스트를 최대한 건드리지 않고, `distrobox` 안에 Ubuntu + Quickemu 실행 환경을 만든 뒤 Windows 10/11 VM을 실행하는 방식입니다. Windows용 보안 프로그램이 필요한 웹사이트는 Wine이나 Linux 컨테이너에서 실패하는 경우가 많아서, 실제 Windows 게스트를 쓰는 쪽이 현실적입니다.
 
-기본 컨테이너 이미지는 Ubuntu 22.04 LTS입니다. SteamOS에 포함된 비교적 오래된 `distrobox` 버전에서는 Ubuntu 24.04 초기화가 `Installing basic packages... Error: An error occurred`로 실패하는 경우가 있어서, 기본값을 22.04로 두었습니다.
+기본 컨테이너 이미지는 `quay.io/toolbx/ubuntu-toolbox:22.04` 입니다. Distrobox 공식 문서에서도 toolbox 이미지는 데스크톱 사용에 더 적합하고 첫 초기화가 훨씬 덜 무겁다고 안내합니다. SteamOS에 포함된 비교적 오래된 `distrobox` 버전에서는 plain Ubuntu 24.04 초기화가 `Installing basic packages... Error: An error occurred`로 실패하는 경우가 있어서, Ubuntu toolbox 22.04를 기본값으로 두었습니다.
 
 ## 빠른 실행
 
