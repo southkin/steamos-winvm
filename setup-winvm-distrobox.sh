@@ -132,16 +132,7 @@ check_host() {
 }
 
 container_exists() {
-  distrobox list --no-color 2>/dev/null | awk -F'|' -v name="$CONTAINER_NAME" '
-    NR == 1 { next }
-    {
-      gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1)
-      if ($1 == name) {
-        found = 1
-      }
-    }
-    END { exit(found ? 0 : 1) }
-  '
+  distrobox list 2>/dev/null | grep -Fq "$CONTAINER_NAME"
 }
 
 container_ready() {
