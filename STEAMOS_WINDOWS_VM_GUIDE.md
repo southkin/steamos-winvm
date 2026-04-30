@@ -47,6 +47,30 @@ DISPLAY_BACKEND=spice ./setup-winvm-distrobox.sh run
 
 `all`은 `setup`, `create`, `desktop`을 한 번에 수행합니다. Windows 설치 화면이 뜬 뒤에는 일반 PC처럼 설치를 끝내면 됩니다.
 
+## apt-get 이 없다고 나올 때
+
+이 스크립트는 Ubuntu 기반 `distrobox`를 전제로 합니다. 그런데 같은 이름의 기존 컨테이너가 이미 있으면 그 컨테이너를 재사용하므로, 예전에 Arch/Fedora 기반으로 만든 `steamos-winvm`이 남아 있으면 `apt-get`이 없다고 나올 수 있습니다.
+
+확인:
+
+```bash
+distrobox enter steamos-winvm -- cat /etc/os-release
+```
+
+복구:
+
+```bash
+./setup-winvm-distrobox.sh recreate
+./setup-winvm-distrobox.sh setup
+```
+
+또는 수동으로 지운 뒤 다시 실행해도 됩니다.
+
+```bash
+distrobox rm steamos-winvm
+./setup-winvm-distrobox.sh all
+```
+
 ## 권한 점검
 
 KVM 가속이 없으면 Windows VM은 실사용이 어려울 정도로 느릴 수 있습니다.

@@ -50,6 +50,7 @@ Commands:
   create              Download/create the Windows VM with quickget
   run                 Run the Windows VM
   desktop             Create a desktop launcher
+  recreate            Remove the existing distrobox, then create it again as Ubuntu
   snapshot-create TAG Create a Quickemu snapshot, for example TAG=clean-install
   snapshot-apply TAG  Restore a Quickemu snapshot
   enter               Enter the distrobox shell
@@ -166,8 +167,26 @@ dbx_bash() {
   distrobox enter "$CONTAINER_NAME" -- bash -lc "$1"
 }
 
+ensure_container_is_ubuntu() {
+  container_ready || die "Distrobox '$CONTAINER_NAME' is not ready. Run './setup-winvm-distrobox.sh setup' first."
+
+  local container_id
+  container_id="$(dbx_bash 'source /etc/os-release 2>/dev/null || true; printf "%s:%s\n" "${ID:-unknown}" "${VERSION_ID:-unknown}"')"
+
+  case "$container_id" in
+    ubuntu:*)
+      ;;
+    *)
+      die "Distrobox '$CONTAINER_NAME' exists but is not Ubuntu ($container_id). Remove it with 'distrobox rm $CONTAINER_NAME' or run './setup-winvm-distrobox.sh recreate'."
+      ;;
+  esac
+
+  dbx_bash 'command -v apt-get >/dev/null 2>&1' || die "Distrobox '$CONTAINER_NAME' is Ubuntu, but apt-get is missing. Recreate the container with './setup-winvm-distrobox.sh recreate'."
+}
+
 install_quickemu() {
   create_container
+  ensure_container_is_ubuntu
 
   log "Installing Quickemu and QEMU packages inside the distrobox."
   dbx_bash '
@@ -338,6 +357,17 @@ enter_container() {
   distrobox enter "$CONTAINER_NAME"
 }
 
+recreate_container() {
+  check_host
+
+  if container_ready; then
+    warn "Removing existing distrobox '$CONTAINER_NAME'."
+    distrobox rm --force "$CONTAINER_NAME"
+  fi
+
+  create_container
+}
+
 cmd="${1:-all}"
 shift || true
 
@@ -361,6 +391,9 @@ case "$cmd" in
     ;;
   desktop)
     create_desktop_entry
+    ;;
+  recreate)
+    recreate_container
     ;;
   snapshot-create)
     snapshot_create "${1:-}"
