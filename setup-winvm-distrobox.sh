@@ -19,8 +19,7 @@ DISTROBOX_ROOTFUL="${DISTROBOX_ROOTFUL:-0}"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT_PATH="$SCRIPT_DIR/$(basename -- "${BASH_SOURCE[0]}")"
-VM_CONF_NAME="windows-${WINDOWS_VERSION}.conf"
-VM_CONF_PATH="$VM_DIR/$VM_CONF_NAME"
+VM_CONF_PREFIX="windows-${WINDOWS_VERSION}"
 
 log() {
   printf '[steamos-winvm] %s\n' "$*"
@@ -37,6 +36,24 @@ die() {
 
 quote() {
   printf '%q' "$1"
+}
+
+resolve_vm_conf_path() {
+  local default_path="$VM_DIR/$VM_CONF_PREFIX.conf"
+  if [[ -f "$default_path" ]]; then
+    printf '%s\n' "$default_path"
+    return 0
+  fi
+
+  local match
+  match="$(find "$VM_DIR" -maxdepth 1 -type f -name "$VM_CONF_PREFIX*.conf" | sort | head -n 1)"
+  if [[ -n "$match" ]]; then
+    printf '%s\n' "$match"
+    return 0
+  fi
+
+  printf '%s\n' "$default_path"
+  return 1
 }
 
 usage() {
@@ -277,7 +294,9 @@ install_quickemu() {
 }
 
 tune_vm_config() {
-  [[ -f "$VM_CONF_PATH" ]] || die "VM config not found: $VM_CONF_PATH"
+  local vm_conf_path
+  vm_conf_path="$(resolve_vm_conf_path)"
+  [[ -f "$vm_conf_path" ]] || die "VM config not found: $vm_conf_path"
 
   local tmp
   tmp="$(mktemp)"
@@ -285,10 +304,10 @@ tune_vm_config() {
     /^# BEGIN steamos-winvm defaults$/ {skip=1; next}
     /^# END steamos-winvm defaults$/ {skip=0; next}
     skip != 1 {print}
-  ' "$VM_CONF_PATH" > "$tmp"
-  mv "$tmp" "$VM_CONF_PATH"
+  ' "$vm_conf_path" > "$tmp"
+  mv "$tmp" "$vm_conf_path"
 
-  cat >> "$VM_CONF_PATH" <<EOF
+  cat >> "$vm_conf_path" <<EOF
 
 # BEGIN steamos-winvm defaults
 cpu_cores="$CPU_CORES"
@@ -299,14 +318,16 @@ height="$VM_HEIGHT"
 # END steamos-winvm defaults
 EOF
 
-  log "Updated VM defaults in $VM_CONF_PATH"
+  log "Updated VM defaults in $vm_conf_path"
 }
 
 create_windows_vm() {
   install_quickemu
 
-  if [[ -f "$VM_CONF_PATH" ]]; then
-    log "VM config already exists: $VM_CONF_PATH"
+  local vm_conf_path
+  vm_conf_path="$(resolve_vm_conf_path)"
+  if [[ -f "$vm_conf_path" ]]; then
+    log "VM config already exists: $vm_conf_path"
     tune_vm_config
     return 0
   fi
@@ -329,14 +350,19 @@ create_windows_vm() {
 }
 
 run_vm() {
-  if [[ ! -f "$VM_CONF_PATH" ]]; then
+  local vm_conf_path vm_conf_name
+  vm_conf_path="$(resolve_vm_conf_path)"
+
+  if [[ ! -f "$vm_conf_path" ]]; then
     warn "VM config does not exist yet; creating it first."
     create_windows_vm
+    vm_conf_path="$(resolve_vm_conf_path)"
   fi
 
   local q_vm_dir q_conf q_display
   q_vm_dir="$(quote "$VM_DIR")"
-  q_conf="$(quote "$VM_CONF_NAME")"
+  vm_conf_name="$(basename "$vm_conf_path")"
+  q_conf="$(quote "$vm_conf_name")"
   q_display="$(quote "$DISPLAY_BACKEND")"
 
   log "Starting Windows VM. Close Windows normally before closing the VM window."
@@ -371,11 +397,13 @@ EOF
 snapshot_create() {
   local tag="${1:-}"
   [[ -n "$tag" ]] || die "snapshot-create needs a tag, for example: snapshot-create clean-install"
-  [[ -f "$VM_CONF_PATH" ]] || die "VM config not found: $VM_CONF_PATH"
+  local vm_conf_path
+  vm_conf_path="$(resolve_vm_conf_path)"
+  [[ -f "$vm_conf_path" ]] || die "VM config not found: $vm_conf_path"
 
   local q_vm_dir q_conf q_tag
   q_vm_dir="$(quote "$VM_DIR")"
-  q_conf="$(quote "$VM_CONF_NAME")"
+  q_conf="$(quote "$(basename "$vm_conf_path")")"
   q_tag="$(quote "$tag")"
 
   dbx_bash "cd $q_vm_dir && quickemu --vm $q_conf --snapshot create $q_tag"
@@ -384,11 +412,13 @@ snapshot_create() {
 snapshot_apply() {
   local tag="${1:-}"
   [[ -n "$tag" ]] || die "snapshot-apply needs a tag, for example: snapshot-apply clean-install"
-  [[ -f "$VM_CONF_PATH" ]] || die "VM config not found: $VM_CONF_PATH"
+  local vm_conf_path
+  vm_conf_path="$(resolve_vm_conf_path)"
+  [[ -f "$vm_conf_path" ]] || die "VM config not found: $vm_conf_path"
 
   local q_vm_dir q_conf q_tag
   q_vm_dir="$(quote "$VM_DIR")"
-  q_conf="$(quote "$VM_CONF_NAME")"
+  q_conf="$(quote "$(basename "$vm_conf_path")")"
   q_tag="$(quote "$tag")"
 
   dbx_bash "cd $q_vm_dir && quickemu --vm $q_conf --snapshot apply $q_tag"
