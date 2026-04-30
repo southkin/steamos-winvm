@@ -110,6 +110,10 @@ check_host() {
     warn "This does not look like SteamOS. The script can still work on Linux, but the notes are SteamOS-focused."
   fi
 
+  if [[ "$DISTROBOX_ROOTFUL" == "1" ]] && [[ -n "${FLATPAK_ID:-}" || -f /.flatpak-info ]]; then
+    die "Rootful distrobox mode needs host sudo, but this terminal appears to be running inside Flatpak ($FLATPAK_ID). Run the script from SteamOS Konsole or another non-Flatpak host terminal."
+  fi
+
   if ! command -v podman >/dev/null 2>&1 && ! command -v docker >/dev/null 2>&1 && ! command -v lilipod >/dev/null 2>&1; then
     die "No supported container manager found. Distrobox needs podman, docker, or lilipod."
   fi
