@@ -56,6 +56,35 @@ resolve_vm_conf_path() {
   return 1
 }
 
+resolve_vm_media_dir() {
+  local vm_conf_path vm_conf_base
+  vm_conf_path="$(resolve_vm_conf_path)"
+  vm_conf_base="$(basename "$vm_conf_path" .conf)"
+  printf '%s\n' "$VM_DIR/$vm_conf_base"
+}
+
+vm_windows_iso_exists() {
+  local vm_media_dir
+  vm_media_dir="$(resolve_vm_media_dir)"
+  find "$vm_media_dir" -maxdepth 1 -type f -iname 'windows*.iso' | grep -q .
+}
+
+run_quickget() {
+  local q_vm_dir q_version q_language
+  q_vm_dir="$(quote "$VM_DIR")"
+  q_version="$(quote "$WINDOWS_VERSION")"
+
+  mkdir -p "$VM_DIR"
+  log "Creating Windows VM config and downloading Windows media with quickget."
+
+  if [[ -n "$WINDOWS_LANGUAGE" ]]; then
+    q_language="$(quote "$WINDOWS_LANGUAGE")"
+    dbx_bash "mkdir -p $q_vm_dir && cd $q_vm_dir && quickget windows $q_version $q_language || quickget windows $q_version"
+  else
+    dbx_bash "mkdir -p $q_vm_dir && cd $q_vm_dir && quickget windows $q_version"
+  fi
+}
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -328,24 +357,15 @@ create_windows_vm() {
   vm_conf_path="$(resolve_vm_conf_path)"
   if [[ -f "$vm_conf_path" ]]; then
     log "VM config already exists: $vm_conf_path"
+    if ! vm_windows_iso_exists; then
+      warn "Windows install ISO is missing for the existing VM. Regenerating media with quickget."
+      run_quickget
+    fi
     tune_vm_config
     return 0
   fi
 
-  local q_vm_dir q_version q_language
-  q_vm_dir="$(quote "$VM_DIR")"
-  q_version="$(quote "$WINDOWS_VERSION")"
-
-  mkdir -p "$VM_DIR"
-  log "Creating Windows VM config and downloading Windows media with quickget."
-
-  if [[ -n "$WINDOWS_LANGUAGE" ]]; then
-    q_language="$(quote "$WINDOWS_LANGUAGE")"
-    dbx_bash "mkdir -p $q_vm_dir && cd $q_vm_dir && quickget windows $q_version $q_language || quickget windows $q_version"
-  else
-    dbx_bash "mkdir -p $q_vm_dir && cd $q_vm_dir && quickget windows $q_version"
-  fi
-
+  run_quickget
   tune_vm_config
 }
 
