@@ -81,19 +81,20 @@ validate_config() {
 }
 
 install_distrobox_if_requested() {
-  if command -v distrobox >/dev/null 2>&1; then
+  if [[ -x "$HOME/.local/bin/distrobox" ]]; then
+    export PATH="$HOME/.local/bin:$PATH"
+  fi
+
+  if [[ "$INSTALL_DISTROBOX" == "1" ]]; then
+    command -v curl >/dev/null 2>&1 || die "curl is required to install distrobox."
+    log "Installing or updating distrobox into ~/.local using the upstream installer."
+    curl -fsSL https://raw.githubusercontent.com/89luca89/distrobox/main/install | sh -s -- --prefix "$HOME/.local"
+    export PATH="$HOME/.local/bin:$PATH"
+    command -v distrobox >/dev/null 2>&1 || die "distrobox install finished, but distrobox is still not in PATH. Add ~/.local/bin to PATH and rerun."
     return 0
   fi
 
-  if [[ "$INSTALL_DISTROBOX" != "1" ]]; then
-    die "distrobox command not found. On SteamOS 3.5+ it is usually preinstalled. To try a user-local install, rerun with INSTALL_DISTROBOX=1."
-  fi
-
-  command -v curl >/dev/null 2>&1 || die "curl is required to install distrobox."
-  log "Installing distrobox into ~/.local using the upstream installer."
-  curl -fsSL https://raw.githubusercontent.com/89luca89/distrobox/main/install | sh -s -- --prefix "$HOME/.local"
-  export PATH="$HOME/.local/bin:$PATH"
-  command -v distrobox >/dev/null 2>&1 || die "distrobox install finished, but distrobox is still not in PATH. Add ~/.local/bin to PATH and rerun."
+  command -v distrobox >/dev/null 2>&1 || die "distrobox command not found. On SteamOS 3.5+ it is usually preinstalled. To try a user-local install, rerun with INSTALL_DISTROBOX=1."
 }
 
 check_host() {
