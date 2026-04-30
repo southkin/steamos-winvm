@@ -15,7 +15,7 @@ chmod +x ./setup-winvm-distrobox.sh
 ./setup-winvm-distrobox.sh run
 ```
 
-기본값은 Windows 11, 한국어 미디어 요청, 4 CPU, 4 GiB RAM, 80 GiB 디스크, SDL 화면 출력입니다. 바꾸려면 실행 앞에 환경변수를 붙입니다.
+기본값은 Windows 11, Quickemu 기본 언어 미디어, 4 CPU, 4 GiB RAM, 80 GiB 디스크, SDL 화면 출력입니다. 바꾸려면 실행 앞에 환경변수를 붙입니다.
 
 ```bash
 WINDOWS_VERSION=10 DISK_SIZE=100G ./setup-winvm-distrobox.sh all

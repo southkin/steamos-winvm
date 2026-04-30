@@ -7,7 +7,7 @@ CONTAINER_IMAGE="${CONTAINER_IMAGE:-quay.io/toolbx/ubuntu-toolbox:22.04}"
 CONTAINER_HOME="${CONTAINER_HOME:-$HOME/.local/share/$CONTAINER_NAME/home}"
 VM_DIR="${VM_DIR:-$HOME/VMs/quickemu}"
 WINDOWS_VERSION="${WINDOWS_VERSION:-11}"
-WINDOWS_LANGUAGE="${WINDOWS_LANGUAGE:-Korean}"
+WINDOWS_LANGUAGE="${WINDOWS_LANGUAGE:-}"
 DISPLAY_BACKEND="${DISPLAY_BACKEND:-sdl}"
 CPU_CORES="${CPU_CORES:-4}"
 RAM_SIZE="${RAM_SIZE:-4G}"
@@ -93,7 +93,12 @@ run_quickget() {
 
   if [[ -n "$WINDOWS_LANGUAGE" ]]; then
     q_language="$(quote "$WINDOWS_LANGUAGE")"
-    dbx_bash "mkdir -p $q_vm_dir && cd $q_vm_dir && quickget windows $q_version $q_language || quickget windows $q_version"
+    dbx_bash "mkdir -p $q_vm_dir && cd $q_vm_dir && quickget windows $q_version $q_language"
+    if ! vm_windows_iso_exists; then
+      warn "Language-specific Windows media for '$WINDOWS_LANGUAGE' did not produce an install ISO. Falling back to Quickemu default language."
+      reset_vm_definition
+      dbx_bash "mkdir -p $q_vm_dir && cd $q_vm_dir && quickget windows $q_version"
+    fi
   else
     dbx_bash "mkdir -p $q_vm_dir && cd $q_vm_dir && quickget windows $q_version"
   fi
