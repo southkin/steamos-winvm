@@ -15,6 +15,7 @@ DISK_SIZE="${DISK_SIZE:-80G}"
 VM_WIDTH="${VM_WIDTH:-1280}"
 VM_HEIGHT="${VM_HEIGHT:-800}"
 INSTALL_DISTROBOX="${INSTALL_DISTROBOX:-0}"
+DISTROBOX_ROOTFUL="${DISTROBOX_ROOTFUL:-1}"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT_PATH="$SCRIPT_DIR/$(basename -- "${BASH_SOURCE[0]}")"
@@ -63,6 +64,7 @@ Common environment variables:
   DISPLAY_BACKEND=sdl                sdl, gtk, spice, spice-app, none
   CPU_CORES=4 RAM_SIZE=4G DISK_SIZE=80G
   INSTALL_DISTROBOX=1                Install distrobox into ~/.local if missing
+  DISTROBOX_ROOTFUL=1                Use a rootful distrobox; recommended on SteamOS for apt/sudo
 
 Examples:
   ./setup-winvm-distrobox.sh all
@@ -102,6 +104,7 @@ check_host() {
   log "VM directory: $VM_DIR"
   log "Windows target: Windows $WINDOWS_VERSION, language: ${WINDOWS_LANGUAGE:-Quickemu default}"
   log "VM defaults: CPU=$CPU_CORES RAM=$RAM_SIZE disk=$DISK_SIZE display=$DISPLAY_BACKEND"
+  log "Distrobox mode: $([[ "$DISTROBOX_ROOTFUL" == "1" ]] && printf 'rootful' || printf 'rootless')"
 
   if [[ -r /etc/os-release ]] && ! grep -qiE 'steamos|holo' /etc/os-release; then
     warn "This does not look like SteamOS. The script can still work on Linux, but the notes are SteamOS-focused."
@@ -131,12 +134,42 @@ check_host() {
   fi
 }
 
-container_exists() {
+container_exists_rootless() {
   distrobox list 2>/dev/null | grep -Fq "$CONTAINER_NAME"
 }
 
+container_exists_rootful() {
+  distrobox list --root 2>/dev/null | grep -Fq "$CONTAINER_NAME"
+}
+
+container_exists() {
+  if [[ "$DISTROBOX_ROOTFUL" == "1" ]]; then
+    container_exists_rootful
+  else
+    container_exists_rootless
+  fi
+}
+
+dbx_create() {
+  local root_args=()
+  [[ "$DISTROBOX_ROOTFUL" == "1" ]] && root_args+=(--root)
+  distrobox create "${root_args[@]}" "$@"
+}
+
+dbx_enter() {
+  local root_args=()
+  [[ "$DISTROBOX_ROOTFUL" == "1" ]] && root_args+=(--root)
+  distrobox enter "${root_args[@]}" "$@"
+}
+
+dbx_rm() {
+  local root_args=()
+  [[ "$DISTROBOX_ROOTFUL" == "1" ]] && root_args+=(--root)
+  distrobox rm "${root_args[@]}" "$@"
+}
+
 container_ready() {
-  container_exists && distrobox enter "$CONTAINER_NAME" -- true >/dev/null 2>&1
+  container_exists && dbx_enter "$CONTAINER_NAME" -- true >/dev/null 2>&1
 }
 
 create_container() {
@@ -146,6 +179,14 @@ create_container() {
   if container_exists; then
     log "Distrobox '$CONTAINER_NAME' already exists."
     return 0
+  fi
+
+  if [[ "$DISTROBOX_ROOTFUL" == "1" ]] && container_exists_rootless; then
+    die "A rootless distrobox named '$CONTAINER_NAME' already exists. Run './setup-winvm-distrobox.sh recreate' to rebuild it in rootful mode."
+  fi
+
+  if [[ "$DISTROBOX_ROOTFUL" != "1" ]] && container_exists_rootful; then
+    die "A rootful distrobox named '$CONTAINER_NAME' already exists. Run './setup-winvm-distrobox.sh recreate' to rebuild it in rootless mode."
   fi
 
   mkdir -p "$CONTAINER_HOME" "$VM_DIR"
@@ -164,12 +205,12 @@ create_container() {
   fi
 
   log "Creating distrobox '$CONTAINER_NAME'. This can take a few minutes on first pull."
-  DBX_NON_INTERACTIVE=1 distrobox "${args[@]}"
+  DBX_NON_INTERACTIVE=1 dbx_create "${args[@]}"
 }
 
 dbx_bash() {
   container_ready || die "Distrobox '$CONTAINER_NAME' is not ready. Run './setup-winvm-distrobox.sh setup' first."
-  distrobox enter "$CONTAINER_NAME" -- bash -lc "$1"
+  dbx_enter "$CONTAINER_NAME" -- bash -lc "$1"
 }
 
 ensure_container_is_ubuntu() {
@@ -198,17 +239,25 @@ install_quickemu() {
 set -Eeuo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
+as_root() {
+  if [[ "$(id -u)" -eq 0 ]]; then
+    "$@"
+  else
+    sudo "$@"
+  fi
+}
+
 if command -v quickemu >/dev/null 2>&1 && command -v quickget >/dev/null 2>&1; then
   quickemu --version || true
   exit 0
 fi
 
-sudo apt-get update
-sudo apt-get install -y software-properties-common ca-certificates curl gnupg lsb-release
-sudo apt-add-repository -y universe || true
-sudo apt-add-repository -y ppa:flexiondotorg/quickemu
-sudo apt-get update
-sudo apt-get install -y \
+as_root apt-get update
+as_root apt-get install -y software-properties-common ca-certificates curl gnupg lsb-release
+as_root apt-add-repository -y universe || true
+as_root apt-add-repository -y ppa:flexiondotorg/quickemu
+as_root apt-get update
+as_root apt-get install -y \
   quickemu \
   qemu-system-x86 \
   qemu-utils \
@@ -359,17 +408,24 @@ snapshot_apply() {
 
 enter_container() {
   create_container
-  distrobox enter "$CONTAINER_NAME"
+  dbx_enter "$CONTAINER_NAME"
+}
+
+remove_container_variants() {
+  if container_exists_rootless; then
+    warn "Removing existing rootless distrobox '$CONTAINER_NAME'."
+    distrobox rm --force "$CONTAINER_NAME"
+  fi
+
+  if container_exists_rootful; then
+    warn "Removing existing rootful distrobox '$CONTAINER_NAME'."
+    distrobox rm --root --force "$CONTAINER_NAME"
+  fi
 }
 
 recreate_container() {
   check_host
-
-  if container_exists; then
-    warn "Removing existing distrobox '$CONTAINER_NAME'."
-    distrobox rm --force "$CONTAINER_NAME"
-  fi
-
+  remove_container_variants
   create_container
 }
 

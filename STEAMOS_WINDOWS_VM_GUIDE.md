@@ -71,6 +71,27 @@ distrobox rm steamos-winvm
 ./setup-winvm-distrobox.sh all
 ```
 
+## sudo 가 no new privileges 에 막힐 때
+
+SteamOS의 rootless `distrobox`에서는 컨테이너 내부 `sudo`가 아래처럼 막힐 수 있습니다.
+
+```text
+sudo: The "no new privileges" flag is set
+```
+
+이 스크립트는 이제 기본적으로 rootful `distrobox` 모드로 동작합니다. 이미 rootless `steamos-winvm`을 한 번 만든 상태라면 아래처럼 다시 만드는 게 맞습니다.
+
+```bash
+./setup-winvm-distrobox.sh recreate
+./setup-winvm-distrobox.sh all
+```
+
+rootful 모드에서는 `distrobox`가 sudo 비밀번호를 물을 수 있습니다. SteamOS에서 sudo 비밀번호가 아직 없으면 먼저 설정해야 할 수 있습니다.
+
+```bash
+passwd
+```
+
 ## 권한 점검
 
 KVM 가속이 없으면 Windows VM은 실사용이 어려울 정도로 느릴 수 있습니다.
