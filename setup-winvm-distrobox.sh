@@ -221,8 +221,15 @@ create_container() {
   local device_flags=""
   local init_packages="software-properties-common ca-certificates curl gnupg lsb-release qemu-system-x86 qemu-utils qemu-system-gui qemu-system-modules-spice ovmf swtpm-tools genisoimage jq mesa-utils mtools pciutils procps python3 sed socat spice-client-gtk unzip usbutils util-linux uuid-runtime x11-xserver-utils xdg-user-dirs zsync"
   local init_hooks='apt-add-repository -y universe || true; apt-add-repository -y ppa:flexiondotorg/quickemu; apt-get update; apt-get install -y quickemu'
+  local devices=()
   local dev
-  for dev in /dev/kvm /dev/net/tun /dev/vhost-net; do
+  if [[ "$DISTROBOX_ROOTFUL" == "1" ]]; then
+    devices=(/dev/kvm /dev/net/tun /dev/vhost-net)
+  else
+    devices=(/dev/kvm)
+  fi
+
+  for dev in "${devices[@]}"; do
     if [[ -e "$dev" ]]; then
       device_flags="${device_flags:+$device_flags }--device $dev"
     fi
