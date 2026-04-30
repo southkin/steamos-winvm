@@ -176,6 +176,20 @@ container_ready() {
   container_exists && dbx_enter "$CONTAINER_NAME" -- true >/dev/null 2>&1
 }
 
+ensure_container_ready() {
+  if container_ready; then
+    return 0
+  fi
+
+  if [[ "$DISTROBOX_ROOTFUL" == "1" ]] && container_exists; then
+    log "Rootful distrobox needs a first interactive enter to finish setup."
+    log "When the container shell opens, complete any password prompt, then run 'exit' to continue."
+    dbx_enter "$CONTAINER_NAME"
+  fi
+
+  container_ready || die "Distrobox '$CONTAINER_NAME' is not ready. If this is the first rootful run, execute 'distrobox enter --root $CONTAINER_NAME' once, exit, then rerun the script."
+}
+
 create_container() {
   check_host
   log "Checking whether distrobox '$CONTAINER_NAME' already exists."
@@ -213,12 +227,12 @@ create_container() {
 }
 
 dbx_bash() {
-  container_ready || die "Distrobox '$CONTAINER_NAME' is not ready. Run './setup-winvm-distrobox.sh setup' first."
+  ensure_container_ready
   dbx_enter "$CONTAINER_NAME" -- bash -lc "$1"
 }
 
 ensure_container_is_ubuntu() {
-  container_ready || die "Distrobox '$CONTAINER_NAME' is not ready. Run './setup-winvm-distrobox.sh setup' first."
+  ensure_container_ready
 
   local container_id
   container_id="$(dbx_bash 'source /etc/os-release 2>/dev/null || true; printf "%s:%s\n" "${ID:-unknown}" "${VERSION_ID:-unknown}"')"

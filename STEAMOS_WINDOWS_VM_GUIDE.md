@@ -94,6 +94,8 @@ passwd
 
 그리고 rootful 모드는 host `sudo`가 필요하므로, Flatpak으로 설치한 VS Code 같은 sandbox 내부 터미널에서는 실행하면 안 됩니다. SteamOS의 Konsole 같은 일반 호스트 터미널에서 실행해야 합니다.
 
+첫 rootful 실행에서는 `distrobox`가 컨테이너 내부 사용자 설정을 위해 한 번 interactive enter를 요구할 수 있습니다. 스크립트가 컨테이너 쉘을 열면 안내에 따라 진행한 뒤 `exit`로 나오면 나머지 단계가 이어집니다.
+
 ## 권한 점검
 
 KVM 가속이 없으면 Windows VM은 실사용이 어려울 정도로 느릴 수 있습니다.
