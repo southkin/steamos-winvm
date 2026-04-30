@@ -220,7 +220,7 @@ create_container() {
   mkdir -p "$CONTAINER_HOME" "$VM_DIR"
 
   local device_flags=""
-  local init_packages="software-properties-common ca-certificates curl gnupg lsb-release qemu-system-x86 qemu-utils qemu-system-gui qemu-system-modules-spice ovmf swtpm-tools genisoimage jq mesa-utils mtools pciutils procps python3 sed socat spice-client-gtk unzip usbutils util-linux uuid-runtime x11-xserver-utils xdg-user-dirs zsync"
+  local init_packages="software-properties-common ca-certificates curl gnupg lsb-release qemu-system-x86 qemu-utils qemu-system-gui ovmf swtpm-tools genisoimage jq mesa-utils mtools pciutils procps python3 sed socat spice-client-gtk unzip usbutils util-linux uuid-runtime x11-xserver-utils xdg-user-dirs zsync"
   local init_hooks='apt-add-repository -y universe || true; apt-add-repository -y ppa:flexiondotorg/quickemu; apt-get update; apt-get install -y quickemu'
   local devices=()
   local dev
