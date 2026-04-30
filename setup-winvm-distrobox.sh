@@ -69,6 +69,20 @@ vm_windows_iso_exists() {
   find "$vm_media_dir" -maxdepth 1 -type f -iname 'windows*.iso' | grep -q .
 }
 
+reset_vm_definition() {
+  local vm_conf_path vm_media_dir
+  vm_conf_path="$(resolve_vm_conf_path)"
+  vm_media_dir="$(resolve_vm_media_dir)"
+
+  if [[ -f "$vm_conf_path" ]]; then
+    rm -f "$vm_conf_path"
+  fi
+
+  if [[ -d "$vm_media_dir" ]]; then
+    rm -rf "$vm_media_dir"
+  fi
+}
+
 run_quickget() {
   local q_vm_dir q_version q_language
   q_vm_dir="$(quote "$VM_DIR")"
@@ -358,8 +372,10 @@ create_windows_vm() {
   if [[ -f "$vm_conf_path" ]]; then
     log "VM config already exists: $vm_conf_path"
     if ! vm_windows_iso_exists; then
-      warn "Windows install ISO is missing for the existing VM. Regenerating media with quickget."
+      warn "Windows install ISO is missing for the existing VM. Removing incomplete media and regenerating with quickget."
+      reset_vm_definition
       run_quickget
+      vm_conf_path="$(resolve_vm_conf_path)"
     fi
     tune_vm_config
     return 0
