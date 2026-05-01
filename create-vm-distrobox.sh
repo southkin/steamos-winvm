@@ -45,6 +45,36 @@ download_latest_virtio_iso() {
   dbx_bash "curl -fL https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/latest-virtio/virtio-win.iso -o $q_target_path"
 }
 
+download_repo_virtio_iso() {
+  local instance_dir="$1"
+  local virtio_target="$2"
+  local target_path q_target_path
+
+  target_path="$instance_dir/$virtio_target"
+  q_target_path="$(quote "$target_path")"
+  dbx_bash "
+    set -Eeuo pipefail
+    if ! command -v rpm2cpio >/dev/null 2>&1 || ! command -v cpio >/dev/null 2>&1; then
+      sudo apt-get update >/dev/null
+      export DEBIAN_FRONTEND=noninteractive
+      sudo -E apt-get install -y rpm2cpio cpio >/dev/null
+    fi
+    tmpdir=\$(mktemp -d)
+    trap 'rm -rf \"\$tmpdir\"' EXIT
+    rpm_name=\$(curl -fsSL https://fedorapeople.org/groups/virt/virtio-win/repo/latest/ | grep -o 'virtio-win-[0-9][^\" ]*\\.noarch\\.rpm' | sort -Vu | tail -n 1)
+    [[ -n \"\$rpm_name\" ]] || exit 1
+    curl -fL \"https://fedorapeople.org/groups/virt/virtio-win/repo/latest/\$rpm_name\" -o \"\$tmpdir/\$rpm_name\"
+    mkdir -p \"\$tmpdir/extract\"
+    (
+      cd \"\$tmpdir/extract\"
+      rpm2cpio \"\$tmpdir/\$rpm_name\" | cpio -idmu --quiet
+    )
+    iso_path=\$(find \"\$tmpdir/extract\" -type f -path '*/usr/share/virtio-win/*.iso' | sort -V | tail -n 1)
+    [[ -n \"\$iso_path\" ]] || exit 1
+    cp -f \"\$iso_path\" $q_target_path
+  "
+}
+
 create_manual_windows_config() {
   local instance_dir="$1"
   local release="$2"
@@ -99,9 +129,11 @@ handle_windows_manual_fallback() {
   else
     if download_latest_virtio_iso "$instance_dir" "$virtio_target"; then
       log "Downloaded VirtIO ISO from the official latest-virtio URL."
+    elif download_repo_virtio_iso "$instance_dir" "$virtio_target"; then
+      log "Downloaded VirtIO ISO from the virtio-win RPM repository fallback."
     else
       mapfile -t virtio_candidates < <(find_virtio_iso_candidates)
-      [[ "${#virtio_candidates[@]}" -gt 0 ]] || die "No virtio-win ISO found in ~/Downloads, and automatic latest-virtio download failed. Rerun with VIRTIO_ISO_PATH=/path/to/virtio-win.iso"
+      [[ "${#virtio_candidates[@]}" -gt 0 ]] || die "No virtio-win ISO found in ~/Downloads, and automatic VirtIO download failed from both direct and repo fallback paths. Rerun with VIRTIO_ISO_PATH=/path/to/virtio-win.iso"
       pick_file_from_list "Choose a manually downloaded VirtIO ISO:" "${virtio_candidates[@]}"
       cp -f "$SELECTED_FILE" "$instance_dir/$virtio_target"
     fi
