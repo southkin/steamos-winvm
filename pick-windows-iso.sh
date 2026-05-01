@@ -5,7 +5,7 @@ IFS=$'\n\t'
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 MAIN_SCRIPT="$SCRIPT_DIR/setup-winvm-distrobox.sh"
 DOWNLOADS_DIR="${DOWNLOADS_DIR:-$HOME/Downloads}"
-RUN_AFTER_IMPORT="${RUN_AFTER_IMPORT:-0}"
+RUN_AFTER_IMPORT="${RUN_AFTER_IMPORT:-1}"
 
 die() {
   printf '[pick-windows-iso][error] %s\n' "$*" >&2
