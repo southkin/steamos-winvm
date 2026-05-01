@@ -6,31 +6,42 @@
 
 SteamOS 기본 `distrobox`가 너무 오래되어 초기화가 계속 실패하면, `INSTALL_DISTROBOX=1`로 upstream 최신 `distrobox`를 `~/.local/bin`에 설치해서 그 버전을 우선 사용하도록 할 수 있습니다.
 
-만약 `quickget`이 Windows 설치 ISO를 자동으로 못 가져오면, ISO 다운로드만 수동으로 하고 `./setup-winvm-distrobox.sh import-iso /path/to/file.iso` 또는 `WINDOWS_ISO_PATH=/path/to/file.iso ./setup-winvm-distrobox.sh create` 로 기대 위치에 자동 복사할 수 있습니다.
+현재 추천 흐름은 스크립트를 둘로 나눠 쓰는 방식입니다.
 
-`~/Downloads` 아래 ISO 파일을 번호로 골라 바로 `import-iso`에 넘기고 싶다면 `./pick-windows-iso.sh` 를 쓸 수 있습니다. 기본 동작이 가져온 뒤 바로 VM 실행까지 이어지는 방식이며, 실행을 막고 싶을 때만 `RUN_AFTER_IMPORT=0 ./pick-windows-iso.sh` 를 쓰면 됩니다.
+- `./create-vm-distrobox.sh`
+  `quickget --list-json` 기준으로 내려받을 수 있는 OS 목록을 보여주고, OS 계열/릴리스/옵션을 골라 VM을 생성합니다.
+- `./run-vm-distrobox.sh`
+  이미 만들어 둔 VM 설정 파일들을 번호로 보여주고, 선택한 VM을 실행합니다.
+
+VM 이름은 별도 입력 대신 `os-release-option` 형태의 규칙적인 디렉터리 이름으로 관리합니다. 예를 들면 `windows-11`, `ubuntu-24.04`, `nixos-unstable-minimal` 같은 식입니다.
+
+자동 다운로드가 해당 미디어를 못 가져올 때만, 수동으로 받은 ISO를 `./setup-winvm-distrobox.sh import-iso /path/to/file.iso` 로 넣을 수 있습니다. 이 경로는 예외적인 fallback 용도입니다.
 
 ## 빠른 실행
 
 ```bash
 cd /path/to/steamos-winvm
-chmod +x ./setup-winvm-distrobox.sh
-./setup-winvm-distrobox.sh all
-./setup-winvm-distrobox.sh run
+chmod +x ./create-vm-distrobox.sh ./run-vm-distrobox.sh
+./create-vm-distrobox.sh
+./run-vm-distrobox.sh
 ```
+
+생성 스크립트는 필요한 설치 미디어를 `quickget`으로 자동 다운로드부터 수행합니다.
 
 기본값은 Windows 11, Quickemu 기본 언어 미디어, 4 CPU, 4 GiB RAM, 80 GiB 디스크, SDL 화면 출력입니다. 바꾸려면 실행 앞에 환경변수를 붙입니다.
 
 ```bash
-WINDOWS_VERSION=10 DISK_SIZE=100G ./setup-winvm-distrobox.sh all
-DISPLAY_BACKEND=spice ./setup-winvm-distrobox.sh run
+CPU_CORES=6 RAM_SIZE=8G ./create-vm-distrobox.sh
+DISPLAY_BACKEND=spice ./run-vm-distrobox.sh
 ```
+
+컨테이너 재생성이나 스냅샷 같은 고급 유지보수 명령은 기존 `setup-winvm-distrobox.sh` 를 계속 써도 됩니다.
 
 ## 자동화되는 부분
 
 - `distrobox` 컨테이너 생성
 - 컨테이너 생성 단계에서 Quickemu/QEMU/OVMF/swtpm/VirtIO 관련 패키지 초기 설치
-- `quickget windows 10` 또는 `quickget windows 11`로 Windows ISO와 VM 설정 생성
+- `quickget windows 10` 또는 `quickget windows 11`로 Windows ISO 자동 다운로드 및 VM 설정 생성
 - SteamOS 앱 런처용 `.desktop` 파일 생성
 - 반복 실행용 `run`, 스냅샷용 `snapshot-create`, `snapshot-apply` 명령 제공
 
@@ -47,13 +58,11 @@ DISPLAY_BACKEND=spice ./setup-winvm-distrobox.sh run
 ## 실행 명령
 
 ```bash
-./setup-winvm-distrobox.sh check
-./setup-winvm-distrobox.sh setup
-./setup-winvm-distrobox.sh create
-./setup-winvm-distrobox.sh run
+./create-vm-distrobox.sh
+./run-vm-distrobox.sh
 ```
 
-`all`은 `setup`, `create`, `desktop`을 한 번에 수행합니다. Windows 설치 화면이 뜬 뒤에는 일반 PC처럼 설치를 끝내면 됩니다.
+`create-vm-distrobox.sh` 는 필요한 distrobox와 Quickemu 런타임을 준비한 뒤 선택한 게스트를 생성합니다. `run-vm-distrobox.sh` 는 저장된 VM 목록을 보여주고 선택 실행합니다. 설치 화면이 뜬 뒤에는 일반 PC처럼 설치를 끝내면 됩니다.
 
 ## apt-get 이 없다고 나올 때
 
@@ -143,7 +152,7 @@ reboot
 기본 `DISPLAY_BACKEND=sdl`은 Windows 10/11에서 Quickemu가 권장하는 안정적인 표시 방식입니다. 클립보드 공유나 SPICE USB 리다이렉션이 필요하면 다음처럼 실행해 볼 수 있습니다.
 
 ```bash
-DISPLAY_BACKEND=spice ./setup-winvm-distrobox.sh run
+DISPLAY_BACKEND=spice ./run-vm-distrobox.sh
 ```
 
 다만 Quickemu 문서에는 Windows 10/11 게스트에서 SPICE 표시 방식이 멈춤을 일으킬 수 있다는 알려진 문제가 있습니다. USB 보안토큰이 꼭 필요하다면 SPICE로 시도하되, 멈춤이 있으면 SDL로 되돌리는 편이 낫습니다.

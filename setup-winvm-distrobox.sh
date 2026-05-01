@@ -16,7 +16,9 @@ VM_WIDTH="${VM_WIDTH:-1280}"
 VM_HEIGHT="${VM_HEIGHT:-800}"
 INSTALL_DISTROBOX="${INSTALL_DISTROBOX:-0}"
 DISTROBOX_ROOTFUL="${DISTROBOX_ROOTFUL:-0}"
-WINDOWS_ISO_PATH="${WINDOWS_ISO_PATH:-}"
+LINUX_TEST_OS="${LINUX_TEST_OS:-nixos}"
+LINUX_TEST_RELEASE="${LINUX_TEST_RELEASE:-unstable}"
+LINUX_TEST_EDITION="${LINUX_TEST_EDITION:-minimal}"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT_PATH="$SCRIPT_DIR/$(basename -- "${BASH_SOURCE[0]}")"
@@ -85,6 +87,7 @@ resolve_vm_install_iso_path() {
 vm_windows_iso_exists() {
   local vm_media_dir
   vm_media_dir="$(resolve_vm_media_dir)"
+  [[ -d "$vm_media_dir" ]] || return 1
   find "$vm_media_dir" -maxdepth 1 -type f -iname 'windows*.iso' | grep -q .
 }
 
@@ -103,7 +106,7 @@ reset_vm_definition() {
 }
 
 import_windows_iso() {
-  local source_iso="${1:-$WINDOWS_ISO_PATH}"
+  local source_iso="${1:-}"
   [[ -n "$source_iso" ]] || die "import-iso needs a source ISO path."
   [[ -f "$source_iso" ]] || die "ISO not found: $source_iso"
 
@@ -121,7 +124,7 @@ run_quickget() {
   q_version="$(quote "$WINDOWS_VERSION")"
 
   mkdir -p "$VM_DIR"
-  log "Creating Windows VM config and downloading Windows media with quickget."
+  log "Creating Windows VM config and auto-downloading Windows media with quickget."
 
   if [[ -n "$WINDOWS_LANGUAGE" ]]; then
     q_language="$(quote "$WINDOWS_LANGUAGE")"
@@ -136,6 +139,12 @@ run_quickget() {
   fi
 }
 
+ensure_windows_media_downloaded() {
+  vm_windows_iso_exists && return 0
+
+  die "quickget did not produce a Windows install ISO. Check the quickget output and network access, then rerun."
+}
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -145,8 +154,9 @@ Commands:
   all                 Check host, create distrobox, install Quickemu, create Windows VM, create desktop entry
   check               Check host prerequisites and print warnings
   setup               Create/update the distrobox and install Quickemu dependencies
-  create              Download/create the Windows VM with quickget
-  import-iso PATH     Copy a manually-downloaded Windows ISO into the expected VM path
+  create              Auto-download/create the Windows VM with quickget
+  import-iso PATH     Manually import a Windows ISO as a fallback
+  linux-test          Auto-download and run a small Linux guest for smoke testing
   run                 Run the Windows VM
   desktop             Create a desktop launcher
   recreate            Remove the existing distrobox, then create it again as Ubuntu
@@ -163,11 +173,14 @@ Common environment variables:
   CPU_CORES=4 RAM_SIZE=4G DISK_SIZE=80G
   INSTALL_DISTROBOX=1                Install distrobox into ~/.local if missing
   DISTROBOX_ROOTFUL=1                Optional rootful distrobox mode; rootless is the default
-  WINDOWS_ISO_PATH=/path/file.iso    Import a manually-downloaded Windows ISO during create
+  LINUX_TEST_OS=nixos                Linux guest family for linux-test
+  LINUX_TEST_RELEASE=unstable        Linux release/channel for linux-test
+  LINUX_TEST_EDITION=minimal         Optional edition for linux-test
 
 Examples:
   ./setup-winvm-distrobox.sh all
-  ./setup-winvm-distrobox.sh import-iso ~/Downloads/Win11.iso
+  ./setup-winvm-distrobox.sh create
+  ./setup-winvm-distrobox.sh linux-test
   DISPLAY_BACKEND=spice ./setup-winvm-distrobox.sh run
   ./setup-winvm-distrobox.sh snapshot-create clean-install
 EOF
@@ -412,26 +425,47 @@ create_windows_vm() {
   if [[ -f "$vm_conf_path" ]]; then
     log "VM config already exists: $vm_conf_path"
     if ! vm_windows_iso_exists; then
-      if [[ -n "$WINDOWS_ISO_PATH" ]]; then
-        warn "Windows install ISO is missing for the existing VM. Importing manually downloaded ISO."
-        import_windows_iso
-      else
-        warn "Windows install ISO is missing for the existing VM. Removing incomplete media and regenerating with quickget."
-        reset_vm_definition
-        run_quickget
-        vm_conf_path="$(resolve_vm_conf_path)"
-      fi
+      warn "Windows install ISO is missing for the existing VM. Removing incomplete media and regenerating with quickget."
+      reset_vm_definition
+      run_quickget
+      ensure_windows_media_downloaded
+      vm_conf_path="$(resolve_vm_conf_path)"
     fi
     tune_vm_config
     return 0
   fi
 
   run_quickget
-  if ! vm_windows_iso_exists && [[ -n "$WINDOWS_ISO_PATH" ]]; then
-    warn "quickget did not produce a Windows install ISO. Importing manually downloaded ISO."
-    import_windows_iso
-  fi
+  ensure_windows_media_downloaded
   tune_vm_config
+}
+
+linux_smoke_test() {
+  install_quickemu
+
+  local linux_conf_base q_vm_dir q_os q_release q_edition q_conf q_display q_cmd
+  linux_conf_base="$LINUX_TEST_OS-$LINUX_TEST_RELEASE"
+  if [[ -n "$LINUX_TEST_EDITION" ]]; then
+    linux_conf_base="$linux_conf_base-$LINUX_TEST_EDITION"
+  fi
+
+  q_vm_dir="$(quote "$VM_DIR")"
+  q_os="$(quote "$LINUX_TEST_OS")"
+  q_release="$(quote "$LINUX_TEST_RELEASE")"
+  q_conf="$(quote "$linux_conf_base.conf")"
+  q_display="$(quote "$DISPLAY_BACKEND")"
+
+  if [[ -n "$LINUX_TEST_EDITION" ]]; then
+    q_edition="$(quote "$LINUX_TEST_EDITION")"
+    q_cmd="mkdir -p $q_vm_dir && cd $q_vm_dir && quickget $q_os $q_release $q_edition"
+  else
+    q_cmd="mkdir -p $q_vm_dir && cd $q_vm_dir && quickget $q_os $q_release"
+  fi
+
+  log "Downloading Linux smoke-test guest: $LINUX_TEST_OS $LINUX_TEST_RELEASE ${LINUX_TEST_EDITION:-default}"
+  dbx_bash "$q_cmd"
+  log "Starting Linux smoke-test VM: $linux_conf_base.conf"
+  dbx_bash "cd $q_vm_dir && quickemu --vm $q_conf --display $q_display"
 }
 
 run_vm() {
@@ -549,6 +583,9 @@ case "$cmd" in
     ;;
   create)
     create_windows_vm
+    ;;
+  linux-test)
+    linux_smoke_test
     ;;
   run)
     run_vm
