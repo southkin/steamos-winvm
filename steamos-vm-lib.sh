@@ -40,6 +40,51 @@ sanitize_slug() {
     | tr -cs 'a-z0-9._-' '-'
 }
 
+set_container_context() {
+  CONTAINER_NAME="$1"
+  CONTAINER_HOME="$HOME/.local/share/$CONTAINER_NAME/home"
+}
+
+build_container_name() {
+  printf 'steamos-vm-%s\n' "$(sanitize_slug "$1")"
+}
+
+metadata_path_for_instance() {
+  printf '%s/.steamos-vm.env\n' "$1"
+}
+
+write_vm_metadata() {
+  local instance_dir="$1"
+  local vm_conf_path="$2"
+  local display_name="$3"
+  local guest_os="$4"
+  local release="$5"
+  local option="${6:-}"
+  local metadata_path q_container_name q_vm_conf_path q_display_name q_guest_os q_release q_option
+
+  metadata_path="$(metadata_path_for_instance "$instance_dir")"
+  q_container_name="$(quote "$CONTAINER_NAME")"
+  q_vm_conf_path="$(quote "$vm_conf_path")"
+  q_display_name="$(quote "$display_name")"
+  q_guest_os="$(quote "$guest_os")"
+  q_release="$(quote "$release")"
+  q_option="$(quote "$option")"
+
+  cat > "$metadata_path" <<EOF
+container_name=$q_container_name
+vm_conf_path=$q_vm_conf_path
+display_name=$q_display_name
+guest_os=$q_guest_os
+release=$q_release
+option=$q_option
+EOF
+}
+
+list_vm_metadata_files() {
+  [[ -d "$VM_ROOT_DIR" ]] || return 1
+  find "$VM_ROOT_DIR" -maxdepth 2 -type f -name '.steamos-vm.env' | sort
+}
+
 install_distrobox_if_requested() {
   if [[ -x "$HOME/.local/bin/distrobox" ]]; then
     export PATH="$HOME/.local/bin:$PATH"
@@ -322,6 +367,10 @@ run_quickget_selection() {
   else
     dbx_bash "mkdir -p $q_instance_dir && cd $q_instance_dir && quickget $q_guest_os $q_release"
   fi
+}
+
+quickemu_path_in_container() {
+  dbx_bash 'command -v quickemu'
 }
 
 find_vm_config_in_dir() {
