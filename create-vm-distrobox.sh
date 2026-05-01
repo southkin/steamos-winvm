@@ -8,12 +8,19 @@ source "$SCRIPT_DIR/steamos-vm-lib.sh"
 
 install_quickemu
 
-mapfile -t FAMILY_LINES < <(list_guest_families)
-[[ "${#FAMILY_LINES[@]}" -gt 0 ]] || die "quickget did not return any downloadable guest systems."
+log "Loading downloadable OS catalog."
+mapfile -t CATALOG_LINES < <(list_guest_catalog)
+[[ "${#CATALOG_LINES[@]}" -gt 0 ]] || die "quickget did not return any downloadable guest systems."
 
+declare -A SEEN_FAMILIES=()
+declare -a FAMILY_LINES=()
 declare -a FAMILY_LABELS=()
-for line in "${FAMILY_LINES[@]}"; do
-  IFS=$'\t' read -r display_name guest_os <<< "$line"
+for line in "${CATALOG_LINES[@]}"; do
+  IFS=$'\t' read -r display_name guest_os release option <<< "$line"
+  family_key="${display_name}"$'\t'"${guest_os}"
+  [[ -n "${SEEN_FAMILIES[$family_key]:-}" ]] && continue
+  SEEN_FAMILIES["$family_key"]=1
+  FAMILY_LINES+=("$family_key")
   FAMILY_LABELS+=("$display_name [$guest_os]")
 done
 
@@ -21,13 +28,33 @@ prompt_select_index "Choose a guest OS family to download:" "${FAMILY_LABELS[@]}
 FAMILY_LINE="${FAMILY_LINES[$((SELECTED_INDEX - 1))]}"
 IFS=$'\t' read -r DISPLAY_NAME GUEST_OS <<< "$FAMILY_LINE"
 
-mapfile -t RELEASES < <(list_guest_releases "$GUEST_OS")
+log "Loading releases for $DISPLAY_NAME."
+declare -A SEEN_RELEASES=()
+declare -a RELEASES=()
+for line in "${CATALOG_LINES[@]}"; do
+  IFS=$'\t' read -r display_name guest_os release option <<< "$line"
+  [[ "$guest_os" == "$GUEST_OS" ]] || continue
+  [[ -n "${SEEN_RELEASES[$release]:-}" ]] && continue
+  SEEN_RELEASES["$release"]=1
+  RELEASES+=("$release")
+done
 [[ "${#RELEASES[@]}" -gt 0 ]] || die "No releases found for $GUEST_OS."
 prompt_select_index "Choose a release for $DISPLAY_NAME:" "${RELEASES[@]}"
 RELEASE="${RELEASES[$((SELECTED_INDEX - 1))]}"
 
 OPTION=""
-mapfile -t OPTIONS < <(list_guest_options "$GUEST_OS" "$RELEASE")
+log "Loading options for $DISPLAY_NAME $RELEASE."
+declare -A SEEN_OPTIONS=()
+declare -a OPTIONS=()
+for line in "${CATALOG_LINES[@]}"; do
+  IFS=$'\t' read -r display_name guest_os release option <<< "$line"
+  [[ "$guest_os" == "$GUEST_OS" ]] || continue
+  [[ "$release" == "$RELEASE" ]] || continue
+  [[ -n "$option" ]] || continue
+  [[ -n "${SEEN_OPTIONS[$option]:-}" ]] && continue
+  SEEN_OPTIONS["$option"]=1
+  OPTIONS+=("$option")
+done
 if [[ "${#OPTIONS[@]}" -gt 0 ]]; then
   prompt_select_index "Choose an option for $DISPLAY_NAME $RELEASE:" "${OPTIONS[@]}"
   OPTION="${OPTIONS[$((SELECTED_INDEX - 1))]}"

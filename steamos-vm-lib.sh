@@ -271,6 +271,10 @@ list_guest_families() {
   dbx_bash "quickget --list-json | jq -r '.[] | [.\"Display Name\", .OS] | @tsv' | sort -u"
 }
 
+list_guest_catalog() {
+  dbx_bash "quickget --list-json | jq -r '.[] | [.\"Display Name\", .OS, .Release, .Option] | @tsv'"
+}
+
 list_guest_releases() {
   local guest_os="$1"
   local q_guest_os
