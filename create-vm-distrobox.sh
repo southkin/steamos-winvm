@@ -33,6 +33,16 @@ find_virtio_iso_candidates() {
   find "$HOME/Downloads" -maxdepth 1 -type f -iname 'virtio-win*.iso' | sort
 }
 
+download_latest_virtio_iso() {
+  local instance_dir="$1"
+  local virtio_target="$2"
+  local target_path q_target_path
+
+  target_path="$instance_dir/$virtio_target"
+  q_target_path="$(quote "$target_path")"
+  dbx_bash "curl -fL https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/latest-virtio/virtio-win.iso -o $q_target_path"
+}
+
 create_manual_windows_config() {
   local instance_dir="$1"
   local release="$2"
@@ -79,10 +89,14 @@ handle_windows_manual_fallback() {
   if [[ -n "$existing_virtio_iso" ]]; then
     virtio_target="$(basename "$existing_virtio_iso")"
   else
-    mapfile -t virtio_candidates < <(find_virtio_iso_candidates)
-    [[ "${#virtio_candidates[@]}" -gt 0 ]] || die "No virtio-win ISO found in ~/Downloads. Download it manually, then rerun."
-    pick_file_from_list "Choose a manually downloaded VirtIO ISO:" "${virtio_candidates[@]}"
-    cp -f "$SELECTED_FILE" "$instance_dir/$virtio_target"
+    if download_latest_virtio_iso "$instance_dir" "$virtio_target"; then
+      log "Downloaded VirtIO ISO from the official latest-virtio URL."
+    else
+      mapfile -t virtio_candidates < <(find_virtio_iso_candidates)
+      [[ "${#virtio_candidates[@]}" -gt 0 ]] || die "No virtio-win ISO found in ~/Downloads, and automatic latest-virtio download failed."
+      pick_file_from_list "Choose a manually downloaded VirtIO ISO:" "${virtio_candidates[@]}"
+      cp -f "$SELECTED_FILE" "$instance_dir/$virtio_target"
+    fi
   fi
 
   create_manual_windows_config "$instance_dir" "$release" "$windows_target" "$virtio_target"
