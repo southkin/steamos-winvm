@@ -143,7 +143,22 @@ check_host() {
 }
 
 container_exists_rootless() {
-  distrobox list 2>/dev/null | grep -Fq "$CONTAINER_NAME"
+  if distrobox list 2>/dev/null | grep -Fq "$CONTAINER_NAME"; then
+    return 0
+  fi
+  if command -v podman >/dev/null 2>&1; then
+    podman container exists "$CONTAINER_NAME" 2>/dev/null
+    return $?
+  fi
+  if command -v docker >/dev/null 2>&1; then
+    docker container inspect "$CONTAINER_NAME" >/dev/null 2>&1
+    return $?
+  fi
+  if command -v lilipod >/dev/null 2>&1; then
+    lilipod inspect "$CONTAINER_NAME" >/dev/null 2>&1
+    return $?
+  fi
+  return 1
 }
 
 container_exists_rootful() {
@@ -171,7 +186,7 @@ dbx_enter() {
 }
 
 container_ready() {
-  container_exists && dbx_enter "$CONTAINER_NAME" -- true >/dev/null 2>&1
+  dbx_enter "$CONTAINER_NAME" -- bash -lc 'exit 0' >/dev/null 2>&1
 }
 
 ensure_container_ready() {
@@ -180,14 +195,9 @@ ensure_container_ready() {
   fi
 
   if container_exists; then
-    if [[ "$DISTROBOX_ROOTFUL" == "1" ]]; then
-      log "Rootful distrobox needs a first interactive enter to finish setup."
-      log "When the container shell opens, complete any password prompt, then run 'exit' to continue."
-    else
-      log "The distrobox needs a first interactive enter to finish setup."
-      log "When the container shell opens, wait for the prompt, then run 'exit' to continue."
-    fi
-    dbx_enter "$CONTAINER_NAME"
+    log "Finishing initial distrobox setup for '$CONTAINER_NAME'."
+    dbx_enter "$CONTAINER_NAME" -- bash -lc 'exit 0' >/dev/null 2>&1 || true
+    container_ready && return 0
   fi
 
   if [[ "$DISTROBOX_ROOTFUL" == "1" ]]; then
