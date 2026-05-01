@@ -7,6 +7,8 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/steamos-vm-lib.sh"
 
 CATALOG_CONTAINER_NAME="${CATALOG_CONTAINER_NAME:-steamos-winvm-catalog}"
+WINDOWS_ISO_PATH="${WINDOWS_ISO_PATH:-}"
+VIRTIO_ISO_PATH="${VIRTIO_ISO_PATH:-}"
 
 pick_file_from_list() {
   local prompt="$1"
@@ -78,9 +80,12 @@ handle_windows_manual_fallback() {
   existing_windows_iso="$(find "$instance_dir" -maxdepth 1 -type f \( -iname '*windows*.iso' -o -iname 'win*.iso' \) ! -iname 'virtio-win*.iso' | sort | head -n 1)"
   if [[ -n "$existing_windows_iso" ]]; then
     windows_target="$(basename "$existing_windows_iso")"
+  elif [[ -n "$WINDOWS_ISO_PATH" ]]; then
+    [[ -f "$WINDOWS_ISO_PATH" ]] || die "WINDOWS_ISO_PATH does not exist: $WINDOWS_ISO_PATH"
+    cp -f "$WINDOWS_ISO_PATH" "$instance_dir/$windows_target"
   else
     mapfile -t windows_candidates < <(find_windows_iso_candidates)
-    [[ "${#windows_candidates[@]}" -gt 0 ]] || die "No Windows ISO found in ~/Downloads. Download it in a browser, then rerun."
+    [[ "${#windows_candidates[@]}" -gt 0 ]] || die "No Windows ISO found in ~/Downloads. Download it in a browser, or rerun with WINDOWS_ISO_PATH=/path/to/windows.iso"
     pick_file_from_list "Choose a manually downloaded Windows ISO:" "${windows_candidates[@]}"
     cp -f "$SELECTED_FILE" "$instance_dir/$windows_target"
   fi
@@ -88,12 +93,15 @@ handle_windows_manual_fallback() {
   existing_virtio_iso="$(find "$instance_dir" -maxdepth 1 -type f -iname 'virtio-win*.iso' | sort | head -n 1)"
   if [[ -n "$existing_virtio_iso" ]]; then
     virtio_target="$(basename "$existing_virtio_iso")"
+  elif [[ -n "$VIRTIO_ISO_PATH" ]]; then
+    [[ -f "$VIRTIO_ISO_PATH" ]] || die "VIRTIO_ISO_PATH does not exist: $VIRTIO_ISO_PATH"
+    cp -f "$VIRTIO_ISO_PATH" "$instance_dir/$virtio_target"
   else
     if download_latest_virtio_iso "$instance_dir" "$virtio_target"; then
       log "Downloaded VirtIO ISO from the official latest-virtio URL."
     else
       mapfile -t virtio_candidates < <(find_virtio_iso_candidates)
-      [[ "${#virtio_candidates[@]}" -gt 0 ]] || die "No virtio-win ISO found in ~/Downloads, and automatic latest-virtio download failed."
+      [[ "${#virtio_candidates[@]}" -gt 0 ]] || die "No virtio-win ISO found in ~/Downloads, and automatic latest-virtio download failed. Rerun with VIRTIO_ISO_PATH=/path/to/virtio-win.iso"
       pick_file_from_list "Choose a manually downloaded VirtIO ISO:" "${virtio_candidates[@]}"
       cp -f "$SELECTED_FILE" "$instance_dir/$virtio_target"
     fi
