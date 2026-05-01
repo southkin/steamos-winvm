@@ -334,7 +334,6 @@ create_container() {
 
   local device_flags=""
   local init_packages="software-properties-common ca-certificates curl gnupg lsb-release qemu-system-x86 qemu-utils qemu-system-gui ovmf swtpm-tools genisoimage jq mesa-utils mtools pciutils procps python3 sed socat spice-client-gtk unzip usbutils util-linux uuid-runtime x11-xserver-utils xdg-user-dirs zsync"
-  local init_hooks='apt-add-repository -y universe || true; apt-add-repository -y ppa:flexiondotorg/quickemu; apt-get update; apt-get install -y quickemu'
   local devices=()
   local dev
   if [[ "$DISTROBOX_ROOTFUL" == "1" ]]; then
@@ -349,7 +348,7 @@ create_container() {
     fi
   done
 
-  local args=(--name "$CONTAINER_NAME" --image "$CONTAINER_IMAGE" --home "$CONTAINER_HOME" --volume "$VM_DIR:$VM_DIR:rw" --additional-packages "$init_packages" --init-hooks "$init_hooks")
+  local args=(--name "$CONTAINER_NAME" --image "$CONTAINER_IMAGE" --home "$CONTAINER_HOME" --volume "$VM_DIR:$VM_DIR:rw" --additional-packages "$init_packages")
   if [[ -n "$device_flags" ]]; then
     args+=(--additional-flags "$device_flags")
   fi
@@ -360,7 +359,7 @@ create_container() {
 
 dbx_bash() {
   ensure_container_ready
-  dbx_enter "$CONTAINER_NAME" -- bash -lc "$1"
+  dbx_enter "$CONTAINER_NAME" -- bash -lc "export PATH=\"\$HOME/.local/bin:\$PATH\"; $1"
 }
 
 ensure_container_is_ubuntu() {
@@ -380,12 +379,31 @@ ensure_container_is_ubuntu() {
   dbx_bash 'command -v apt-get >/dev/null 2>&1' || die "Distrobox '$CONTAINER_NAME' is Ubuntu, but apt-get is missing. Recreate the container with './setup-winvm-distrobox.sh recreate'."
 }
 
+install_quickemu_userland() {
+  log "Installing Quickemu into ~/.local/bin inside the distrobox."
+  dbx_bash '
+    set -Eeuo pipefail
+    mkdir -p "$HOME/.local/bin"
+    tag="$(curl -fsSL https://api.github.com/repos/quickemu-project/quickemu/releases/latest | jq -r .tag_name 2>/dev/null || true)"
+    if [[ -z "$tag" || "$tag" == "null" ]]; then
+      tag="master"
+    fi
+    for tool in quickemu quickget quickreport; do
+      curl -fsSL "https://raw.githubusercontent.com/quickemu-project/quickemu/${tag}/${tool}" -o "$HOME/.local/bin/${tool}"
+      chmod +x "$HOME/.local/bin/${tool}"
+    done
+  '
+}
+
 install_quickemu() {
   create_container
   ensure_container_is_ubuntu
 
   log "Checking Quickemu tooling inside the distrobox."
-  dbx_bash 'command -v quickemu >/dev/null 2>&1 && command -v quickget >/dev/null 2>&1' || die "Quickemu is missing from the distrobox. Run './setup-winvm-distrobox.sh recreate' to rebuild the container."
+  if ! dbx_bash 'command -v quickemu >/dev/null 2>&1 && command -v quickget >/dev/null 2>&1'; then
+    install_quickemu_userland
+    dbx_bash 'command -v quickemu >/dev/null 2>&1 && command -v quickget >/dev/null 2>&1' || die "Quickemu installation inside the distrobox failed."
+  fi
   dbx_bash 'quickemu --version || true; quickget --version || true'
 }
 
